@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 class PostCard extends StatelessWidget {
+  final String username;
   final String topic;
   final String subject;
   final String duration;
@@ -9,6 +10,7 @@ class PostCard extends StatelessWidget {
 
   const PostCard({
     super.key,
+    required this.username,
     required this.topic,
     required this.subject,
     required this.duration,
@@ -30,6 +32,23 @@ class PostCard extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
+              // Top section: Avatar and Username
+              Row(
+                children: [
+                  const CircleAvatar(
+                    radius: 16,
+                    child: Icon(Icons.person),
+                  ),
+                  const SizedBox(width: 8),
+                  Text(
+                    username,
+                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 8),
               // Topic label
               Text(
                 topic,

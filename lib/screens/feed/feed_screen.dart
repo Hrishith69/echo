@@ -9,18 +9,21 @@ class FeedScreen extends StatelessWidget {
 
   static final List<Map<String, dynamic>> _mockPosts = [
     {
+      'username': 'Jess',
       'topic': 'Ask Echo',
       'subject': 'Why do people ghost?',
       'duration': '00:21',
       'replyCount': 3,
     },
     {
+      'username': 'Mike',
       'topic': 'Relationships',
       'subject': 'Is silence a form of communication?',
       'duration': '00:17',
       'replyCount': 5,
     },
     {
+      'username': 'Sara',
       'topic': 'Career',
       'subject': 'How do you deal with imposter syndrome?',
       'duration': '00:25',
@@ -39,7 +42,9 @@ class FeedScreen extends StatelessWidget {
         itemCount: _mockPosts.length,
         itemBuilder: (context, index) {
           final post = _mockPosts[index];
+
           return PostCard(
+            username: post['username'],
             topic: post['topic'],
             subject: post['subject'],
             duration: post['duration'],
