@@ -1,150 +1,162 @@
 import 'package:flutter/material.dart';
+import 'package:echo_app/widgets/waveform_player.dart';
+import 'package:echo_app/widgets/reply_card.dart';
 
 class ThreadScreen extends StatelessWidget {
   const ThreadScreen({super.key});
+
+  // Mock data: replies with hierarchy levels
+  static const List<Map<String, dynamic>> replies = [
+    {
+      "username": "Jess",
+      "text": "Great topic! Listening now!",
+      "level": 0,
+      "isVoice": false
+    },
+    {
+      "username": "Mike",
+      "text": "Same here honestly",
+      "level": 1,
+      "isVoice": true,
+      "duration": "0:18"
+    },
+    {
+      "username": "Mike",
+      "text": "That's what I was thinking too.",
+      "level": 1,
+      "isVoice": false
+    },
+    {
+      "username": "Sara",
+      "text": "I feel the same way...",
+      "level": 0,
+      "isVoice": true,
+      "duration": "0:32"
+    },
+    {
+      "username": "Mike",
+      "text": "Frustrating, right?",
+      "level": 2,
+      "isVoice": false
+    },
+  ];
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
         title: const Text('Thread'),
+        elevation: 0,
       ),
-      body: Padding(
-        padding: const EdgeInsets.all(16.0),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // Topic label
-            Text(
-              'Ask Echo',
-              style: Theme.of(context).textTheme.titleLarge,
-            ),
-            const SizedBox(height: 8),
-            // Subject text
-            Text(
-              'Why do I overthink everything?',
-              style: Theme.of(context).textTheme.bodyLarge,
-            ),
-            const SizedBox(height: 16),
-            // Voice player card
-            Card(
+      body: Column(
+        children: [
+          // TOP SECTION: Topic label and subject
+          Expanded(
+            child: SingleChildScrollView(
               child: Padding(
                 padding: const EdgeInsets.all(16.0),
-                child: Row(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    // Waveform placeholder
-                    Expanded(
-                      child: Container(
-                        height: 40,
-                        color: Colors.grey[300],
-                        child: const Center(child: Text('Waveform')),
-                      ),
+                    // Topic label
+                    Text(
+                      'Ask Echo',
+                      style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                            fontWeight: FontWeight.bold,
+                          ),
                     ),
-                    const SizedBox(width: 16),
-                    // Duration label
-                    const Text('2:15'),
+                    const SizedBox(height: 8),
+                    // Subject text
+                    Text(
+                      'Why do people ghost?',
+                      style: Theme.of(context).textTheme.bodyLarge,
+                    ),
+                    const SizedBox(height: 16),
+                    // AUDIO PLAYER SECTION
+                    const WaveformPlayer(
+                      audioUrl:
+                          'https://samplelib.com/lib/preview/mp3/sample-3s.mp3',
+                    ),
+                    const SizedBox(height: 24),
+                    // REPLIES SECTION
+                    Text(
+                      'Replies',
+                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                            fontWeight: FontWeight.bold,
+                          ),
+                    ),
+                    const SizedBox(height: 12),
+                    // Build replies thread
+                    ..._buildReplyThread(context),
                   ],
                 ),
               ),
             ),
-            const SizedBox(height: 16),
-            // Replies section
-            Expanded(
-              child: ListView(
-                children: [
-                  // Jess
-                  _buildReply('Jess', 'Great topic! Listening now!', 0),
-                  const SizedBox(height: 8),
-                  // Mike voice reply
-                  _buildVoiceReply('Mike', 'Same here honestly', '0:18', 16),
-                  const SizedBox(height: 8),
-                  // Mike text reply
-                  _buildReply('Mike', 'That\'s what I was thinking too.', 16),
-                  const SizedBox(height: 8),
-                  // Sara voice reply
-                  _buildVoiceReply('Sara', 'I feel the same way...', '', 0),
-                  const SizedBox(height: 8),
-                  // Mike reply to Sara
-                  _buildReply('Mike', 'Frustrating, right?', 16),
-                ],
-              ),
-            ),
-          ],
-        ),
+          ),
+        ],
       ),
-      bottomNavigationBar: Padding(
-        padding: const EdgeInsets.all(8.0),
-        child: Row(
-          children: [
-            Expanded(
-              child: TextField(
-                decoration: const InputDecoration(
-                  hintText: 'Reply...',
-                  border: OutlineInputBorder(),
+      // BOTTOM REPLY BAR
+      bottomNavigationBar: SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.all(12.0),
+          child: Row(
+            children: [
+              Expanded(
+                child: TextField(
+                  decoration: InputDecoration(
+                    hintText: 'Reply...',
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(24),
+                      borderSide: BorderSide(color: Colors.grey.shade300),
+                    ),
+                    contentPadding: const EdgeInsets.symmetric(
+                      horizontal: 16,
+                      vertical: 12,
+                    ),
+                  ),
                 ),
               ),
-            ),
-            const SizedBox(width: 8),
-            CircleAvatar(
-              child: IconButton(
-                icon: const Icon(Icons.mic),
-                onPressed: () {},
+              const SizedBox(width: 12),
+              Container(
+                decoration: BoxDecoration(
+                  color: Colors.blue,
+                  shape: BoxShape.circle,
+                ),
+                child: IconButton(
+                  icon: const Icon(
+                    Icons.mic,
+                    color: Colors.white,
+                  ),
+                  onPressed: () {
+                    // TODO: Implement voice recording
+                  },
+                ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );
   }
 
-  Widget _buildReply(String username, String text, double leftPadding) {
-    return Padding(
-      padding: EdgeInsets.only(left: leftPadding),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            username,
-            style: const TextStyle(fontWeight: FontWeight.bold),
-          ),
-          const SizedBox(height: 4),
-          Text(text),
-        ],
-      ),
-    );
-  }
+  // Build reply thread with hierarchy
+  List<Widget> _buildReplyThread(BuildContext context) {
+    List<Widget> widgets = [];
+    for (int i = 0; i < replies.length; i++) {
+      final reply = replies[i];
+      bool isLast = i == replies.length - 1;
 
-  Widget _buildVoiceReply(String username, String text, String duration, double leftPadding) {
-    return Padding(
-      padding: EdgeInsets.only(left: leftPadding),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            username,
-            style: const TextStyle(fontWeight: FontWeight.bold),
-          ),
-          const SizedBox(height: 4),
-          Container(
-            padding: const EdgeInsets.all(8.0),
-            decoration: BoxDecoration(
-              color: Colors.grey[200],
-              borderRadius: BorderRadius.circular(16.0),
-            ),
-            child: Row(
-              children: [
-                const Icon(Icons.play_arrow),
-                const SizedBox(width: 8),
-                Text(text),
-                if (duration.isNotEmpty) ...[
-                  const Spacer(),
-                  Text(duration),
-                ],
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
+      widgets.add(
+        ReplyCard(
+          username: reply['username'],
+          text: reply['text'],
+          level: reply['level'],
+          isVoice: reply['isVoice'] ?? false,
+          duration: reply['duration'],
+          isLast: isLast,
+        ),
+      );
+    }
+    return widgets;
   }
 }
