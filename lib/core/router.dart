@@ -25,7 +25,10 @@ final GoRouter echoRouter = GoRouter(
         ),
         GoRoute(
           path: 'record',
-          builder: (context, state) => const RecordingScreen(),
+          builder: (context, state) {
+            final isReply = state.uri.queryParameters['reply'] == 'true';
+            return RecordingScreen(isReply: isReply);
+          },
         ),
         GoRoute(
           path: 'profile',

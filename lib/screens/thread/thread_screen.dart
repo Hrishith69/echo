@@ -1,11 +1,16 @@
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 import 'package:echo_app/widgets/waveform_player.dart';
 import 'package:echo_app/widgets/reply_card.dart';
 
-class ThreadScreen extends StatelessWidget {
+class ThreadScreen extends StatefulWidget {
   const ThreadScreen({super.key});
 
-  // Mock data: replies with hierarchy levels
+  @override
+  State<ThreadScreen> createState() => _ThreadScreenState();
+}
+
+class _ThreadScreenState extends State<ThreadScreen> {
   static const List<Map<String, dynamic>> replies = [
     {
       "username": "Jess",
@@ -41,16 +46,44 @@ class ThreadScreen extends StatelessWidget {
     },
   ];
 
+  final TextEditingController _replyController = TextEditingController();
+  bool _hasText = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _replyController.addListener(() {
+      setState(() {
+        _hasText = _replyController.text.trim().isNotEmpty;
+      });
+    });
+  }
+
+  @override
+  void dispose() {
+    _replyController.dispose();
+    super.dispose();
+  }
+
+  void _submitReply() {
+    if (_replyController.text.trim().isEmpty) return;
+    _replyController.clear();
+  }
+
+  void _startVoiceReplyRecording() {
+    context.go('/record?reply=true');
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      resizeToAvoidBottomInset: true,
       appBar: AppBar(
         title: const Text('Thread'),
         elevation: 0,
       ),
       body: Column(
         children: [
-          // TOP SECTION: Topic label and subject
           Expanded(
             child: SingleChildScrollView(
               child: Padding(
@@ -58,7 +91,6 @@ class ThreadScreen extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    // Topic label
                     Text(
                       'Ask Echo',
                       style: Theme.of(context).textTheme.titleLarge?.copyWith(
@@ -66,19 +98,16 @@ class ThreadScreen extends StatelessWidget {
                           ),
                     ),
                     const SizedBox(height: 8),
-                    // Subject text
                     Text(
                       'Why do people ghost?',
                       style: Theme.of(context).textTheme.bodyLarge,
                     ),
                     const SizedBox(height: 16),
-                    // AUDIO PLAYER SECTION
                     const WaveformPlayer(
                       audioUrl:
                           'https://samplelib.com/lib/preview/mp3/sample-3s.mp3',
                     ),
                     const SizedBox(height: 24),
-                    // REPLIES SECTION
                     Text(
                       'Replies',
                       style: Theme.of(context).textTheme.titleMedium?.copyWith(
@@ -86,7 +115,6 @@ class ThreadScreen extends StatelessWidget {
                           ),
                     ),
                     const SizedBox(height: 12),
-                    // Build replies thread
                     ..._buildReplyThread(context),
                   ],
                 ),
@@ -95,43 +123,37 @@ class ThreadScreen extends StatelessWidget {
           ),
         ],
       ),
-      // BOTTOM REPLY BAR
       bottomNavigationBar: SafeArea(
         child: Padding(
-          padding: const EdgeInsets.all(12.0),
+          padding: EdgeInsets.only(
+            bottom: MediaQuery.of(context).viewInsets.bottom,
+            left: 12,
+            right: 12,
+            top: 8,
+          ),
           child: Row(
             children: [
               Expanded(
                 child: TextField(
-                  decoration: InputDecoration(
+                  controller: _replyController,
+                  decoration: const InputDecoration(
                     hintText: 'Reply...',
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(24),
-                      borderSide: BorderSide(color: Colors.grey.shade300),
-                    ),
-                    contentPadding: const EdgeInsets.symmetric(
-                      horizontal: 16,
-                      vertical: 12,
-                    ),
+                    border: OutlineInputBorder(),
                   ),
+                  textInputAction: TextInputAction.send,
+                  onSubmitted: (_) => _submitReply(),
                 ),
               ),
-              const SizedBox(width: 12),
-              Container(
-                decoration: BoxDecoration(
-                  color: Colors.blue,
-                  shape: BoxShape.circle,
-                ),
-                child: IconButton(
-                  icon: const Icon(
-                    Icons.mic,
-                    color: Colors.white,
-                  ),
-                  onPressed: () {
-                    // TODO: Implement voice recording
-                  },
-                ),
-              ),
+              const SizedBox(width: 8),
+              _hasText
+                  ? IconButton(
+                      icon: const Icon(Icons.send),
+                      onPressed: _submitReply,
+                    )
+                  : IconButton(
+                      icon: const Icon(Icons.mic),
+                      onPressed: _startVoiceReplyRecording,
+                    ),
             ],
           ),
         ),
@@ -139,24 +161,18 @@ class ThreadScreen extends StatelessWidget {
     );
   }
 
-  // Build reply thread with hierarchy
   List<Widget> _buildReplyThread(BuildContext context) {
-    List<Widget> widgets = [];
-    for (int i = 0; i < replies.length; i++) {
+    return List<Widget>.generate(replies.length, (i) {
       final reply = replies[i];
       bool isLast = i == replies.length - 1;
-
-      widgets.add(
-        ReplyCard(
-          username: reply['username'],
-          text: reply['text'],
-          level: reply['level'],
-          isVoice: reply['isVoice'] ?? false,
-          duration: reply['duration'],
-          isLast: isLast,
-        ),
+      return ReplyCard(
+        username: reply['username'],
+        text: reply['text'],
+        level: reply['level'],
+        isVoice: reply['isVoice'] ?? false,
+        duration: reply['duration'],
+        isLast: isLast,
       );
-    }
-    return widgets;
+    });
   }
 }
