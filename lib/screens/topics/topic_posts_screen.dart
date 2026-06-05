@@ -1,10 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../models/post.dart';
 import '../../services/post_service.dart';
 import '../../widgets/post_card.dart';
 
-class TopicPostsScreen extends StatelessWidget {
+class TopicPostsScreen extends StatefulWidget {
   final String topicId;
   final String topicName;
 
@@ -15,13 +16,25 @@ class TopicPostsScreen extends StatelessWidget {
   });
 
   @override
-  Widget build(BuildContext context) {
-    final postService = PostService();
+  State<TopicPostsScreen> createState() => _TopicPostsScreenState();
+}
 
+class _TopicPostsScreenState extends State<TopicPostsScreen> {
+  final _postService = PostService();
+  late final Stream<List<Post>> _postsStream;
+
+  @override
+  void initState() {
+    super.initState();
+    _postsStream = _postService.watchPostsByTopic(widget.topicId);
+  }
+
+  @override
+  Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: Text(topicName)),
-      body: StreamBuilder(
-        stream: postService.watchPostsByTopic(topicId),
+      appBar: AppBar(title: Text(widget.topicName)),
+      body: StreamBuilder<List<Post>>(
+        stream: _postsStream,
         builder: (context, snapshot) {
           if (snapshot.connectionState == ConnectionState.waiting) {
             return const Center(child: CircularProgressIndicator());
@@ -41,7 +54,7 @@ class TopicPostsScreen extends StatelessWidget {
               final post = posts[index];
               return PostCard(
                 username: post.authorUsername,
-                topic: topicName,
+                topic: widget.topicName,
                 subject: post.subject,
                 duration: post.formattedDuration,
                 replyCount: post.replyCount,
@@ -52,7 +65,7 @@ class TopicPostsScreen extends StatelessWidget {
         },
       ),
       floatingActionButton: FloatingActionButton(
-        onPressed: () => context.go('/topics/$topicId/create'),
+        onPressed: () => context.go('/topics/${widget.topicId}/create'),
         child: const Icon(Icons.add),
       ),
     );

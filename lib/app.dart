@@ -26,8 +26,8 @@ class _EchoAppState extends State<EchoApp> {
 
   @override
   void dispose() {
-    _authProvider.dispose();
     _router.dispose();
+    _authProvider.dispose();
     super.dispose();
   }
 

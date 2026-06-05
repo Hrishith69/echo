@@ -1,6 +1,7 @@
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../models/profile.dart';
+import '../supabase_config.dart';
 import 'supabase_client.dart';
 
 class AuthService {
@@ -8,14 +9,15 @@ class AuthService {
 
   final SupabaseClient _client;
 
-  static const String _emailDomain = 'echo.auth';
-
   User? get currentUser => _client.auth.currentUser;
 
   Stream<AuthState> get authStateChanges => _client.auth.onAuthStateChange;
 
+  /// Maps username → internal email using the project host (valid for Supabase Auth).
+  /// e.g. georgepaul@socqwbntqjssociflrhz.supabase.co
   String authEmailForUsername(String username) {
-    return '${username.trim().toLowerCase()}@$_emailDomain';
+    final host = Uri.parse(SupabaseConfig.url).host;
+    return '${username.trim().toLowerCase()}@$host';
   }
 
   Future<Profile?> getCurrentProfile() async {

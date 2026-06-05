@@ -29,7 +29,7 @@ flutter run
 
 ## Auth note
 
-Users sign in with **username + password** only. Internally: `{username}@echo.auth` via Supabase email auth.
+Users sign in with **username + password** only. Internally: `{username}@<your-project>.supabase.co` via Supabase email auth (users never see the email).
 
 ## Data model
 

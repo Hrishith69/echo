@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
@@ -8,12 +10,14 @@ class EchoAuthProvider extends ChangeNotifier {
   EchoAuthProvider({AuthService? authService})
       : _authService = authService ?? AuthService() {
     _onAuthChanged(_authService.currentUser);
-    _authService.authStateChanges.listen((data) {
+    _authSubscription = _authService.authStateChanges.listen((data) {
       _onAuthChanged(data.session?.user);
     });
   }
 
   final AuthService _authService;
+  late final StreamSubscription<AuthState> _authSubscription;
+  bool _disposed = false;
 
   User? _user;
   Profile? _profile;
@@ -34,12 +38,23 @@ class EchoAuthProvider extends ChangeNotifier {
       _profile = await _authService.getCurrentProfile();
     }
     _loading = false;
-    notifyListeners();
+    _safeNotify();
+  }
+
+  void _safeNotify() {
+    if (!_disposed) notifyListeners();
+  }
+
+  @override
+  void dispose() {
+    _disposed = true;
+    _authSubscription.cancel();
+    super.dispose();
   }
 
   Future<void> refreshProfile() async {
     _profile = await _authService.getCurrentProfile();
-    notifyListeners();
+    _safeNotify();
   }
 
   Future<void> signIn(String username, String password) async {

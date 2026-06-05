@@ -3,6 +3,7 @@ import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 
 import '../../models/comment.dart';
+import '../../models/post.dart';
 import '../../providers/echo_auth_provider.dart';
 import '../../services/comment_service.dart';
 import '../../services/post_service.dart';
@@ -23,12 +24,16 @@ class _ThreadScreenState extends State<ThreadScreen> {
   final _replyController = TextEditingController();
   final _commentService = CommentService();
   final _postService = PostService();
+  late final Stream<Post?> _postStream;
+  late final Stream<List<Comment>> _commentsStream;
   bool _hasText = false;
   String? _replyToCommentId;
 
   @override
   void initState() {
     super.initState();
+    _postStream = _postService.watchPost(widget.postId);
+    _commentsStream = _commentService.watchComments(widget.postId);
     _replyController.addListener(() {
       setState(() {
         _hasText = _replyController.text.trim().isNotEmpty;
@@ -87,8 +92,8 @@ class _ThreadScreenState extends State<ThreadScreen> {
         title: const Text('Thread'),
         elevation: 0,
       ),
-      body: StreamBuilder(
-        stream: _postService.watchPost(widget.postId),
+      body: StreamBuilder<Post?>(
+        stream: _postStream,
         builder: (context, postSnapshot) {
           if (postSnapshot.connectionState == ConnectionState.waiting) {
             return const Center(child: CircularProgressIndicator());
@@ -150,7 +155,7 @@ class _ThreadScreenState extends State<ThreadScreen> {
                         ),
                         const SizedBox(height: 12),
                         StreamBuilder<List<Comment>>(
-                          stream: _commentService.watchComments(widget.postId),
+                          stream: _commentsStream,
                           builder: (context, commentSnapshot) {
                             if (commentSnapshot.connectionState ==
                                 ConnectionState.waiting) {
