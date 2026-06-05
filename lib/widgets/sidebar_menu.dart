@@ -11,18 +11,11 @@ class SidebarMenu extends StatelessWidget {
         padding: EdgeInsets.zero,
         children: [
           const DrawerHeader(
-            decoration: BoxDecoration(
-              color: Colors.blueAccent,
+            decoration: BoxDecoration(color: Colors.blueAccent),
+            child: Text(
+              'Echo Menu',
+              style: TextStyle(color: Colors.white, fontSize: 24),
             ),
-            child: Text('Echo Menu', style: TextStyle(color: Colors.white, fontSize: 24)),
-          ),
-          ListTile(
-            leading: const Icon(Icons.person),
-            title: const Text('Profile'),
-            onTap: () {
-              context.go('/profile');
-              Navigator.pop(context);
-            },
           ),
           ListTile(
             leading: const Icon(Icons.topic),
@@ -33,10 +26,10 @@ class SidebarMenu extends StatelessWidget {
             },
           ),
           ListTile(
-            leading: const Icon(Icons.bookmark),
-            title: const Text('Saved'),
+            leading: const Icon(Icons.person),
+            title: const Text('Profile'),
             onTap: () {
-              context.go('/saved');
+              context.go('/profile');
               Navigator.pop(context);
             },
           ),

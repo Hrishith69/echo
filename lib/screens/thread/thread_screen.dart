@@ -1,53 +1,30 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
-import 'package:echo_app/widgets/waveform_player.dart';
-import 'package:echo_app/widgets/reply_card.dart';
+import 'package:provider/provider.dart';
+
+import '../../models/comment.dart';
+import '../../providers/echo_auth_provider.dart';
+import '../../services/comment_service.dart';
+import '../../services/post_service.dart';
+import '../../utils/comment_tree.dart';
+import '../../widgets/reply_card.dart';
+import '../../widgets/waveform_player.dart';
 
 class ThreadScreen extends StatefulWidget {
-  const ThreadScreen({super.key});
+  final String postId;
+
+  const ThreadScreen({super.key, required this.postId});
 
   @override
   State<ThreadScreen> createState() => _ThreadScreenState();
 }
 
 class _ThreadScreenState extends State<ThreadScreen> {
-  static const List<Map<String, dynamic>> replies = [
-    {
-      "username": "Jess",
-      "text": "Great topic! Listening now!",
-      "level": 0,
-      "isVoice": false
-    },
-    {
-      "username": "Mike",
-      "text": "Same here honestly",
-      "level": 1,
-      "isVoice": true,
-      "duration": "0:18"
-    },
-    {
-      "username": "Mike",
-      "text": "That's what I was thinking too.",
-      "level": 1,
-      "isVoice": false
-    },
-    {
-      "username": "Sara",
-      "text": "I feel the same way...",
-      "level": 0,
-      "isVoice": true,
-      "duration": "0:32"
-    },
-    {
-      "username": "Mike",
-      "text": "Frustrating, right?",
-      "level": 2,
-      "isVoice": false
-    },
-  ];
-
-  final TextEditingController _replyController = TextEditingController();
+  final _replyController = TextEditingController();
+  final _commentService = CommentService();
+  final _postService = PostService();
   bool _hasText = false;
+  String? _replyToCommentId;
 
   @override
   void initState() {
@@ -65,13 +42,41 @@ class _ThreadScreenState extends State<ThreadScreen> {
     super.dispose();
   }
 
-  void _submitReply() {
-    if (_replyController.text.trim().isEmpty) return;
-    _replyController.clear();
+  void _setReplyTarget(String? commentId) {
+    setState(() => _replyToCommentId = commentId);
   }
 
-  void _startVoiceReplyRecording() {
-    context.go('/record?reply=true');
+  Future<void> _submitTextReply() async {
+    final text = _replyController.text.trim();
+    if (text.isEmpty) return;
+
+    final profile = context.read<EchoAuthProvider>().profile;
+    if (profile == null) return;
+
+    try {
+      await _commentService.createTextComment(
+        postId: widget.postId,
+        profile: profile,
+        text: text,
+        parentCommentId: _replyToCommentId,
+      );
+      _replyController.clear();
+      _setReplyTarget(null);
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('$e')),
+        );
+      }
+    }
+  }
+
+  void _startVoiceReply() {
+    final parent = _replyToCommentId;
+    final query = parent != null ? '&parentCommentId=$parent' : '';
+    context.go(
+      '/record?mode=reply&postId=${widget.postId}$query',
+    );
   }
 
   @override
@@ -82,46 +87,110 @@ class _ThreadScreenState extends State<ThreadScreen> {
         title: const Text('Thread'),
         elevation: 0,
       ),
-      body: Column(
-        children: [
-          Expanded(
-            child: SingleChildScrollView(
-              child: Padding(
-                padding: const EdgeInsets.all(16.0),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'Ask Echo',
-                      style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                            fontWeight: FontWeight.bold,
-                          ),
+      body: StreamBuilder(
+        stream: _postService.watchPost(widget.postId),
+        builder: (context, postSnapshot) {
+          if (postSnapshot.connectionState == ConnectionState.waiting) {
+            return const Center(child: CircularProgressIndicator());
+          }
+          final post = postSnapshot.data;
+          if (post == null) {
+            return const Center(child: Text('Post not found'));
+          }
+
+          return Column(
+            children: [
+              if (_replyToCommentId != null)
+                Material(
+                  color: Colors.blue.shade50,
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 16,
+                      vertical: 8,
                     ),
-                    const SizedBox(height: 8),
-                    Text(
-                      'Why do people ghost?',
-                      style: Theme.of(context).textTheme.bodyLarge,
+                    child: Row(
+                      children: [
+                        const Expanded(child: Text('Replying to a comment')),
+                        TextButton(
+                          onPressed: () => _setReplyTarget(null),
+                          child: const Text('Cancel'),
+                        ),
+                      ],
                     ),
-                    const SizedBox(height: 16),
-                    const WaveformPlayer(
-                      audioUrl:
-                          'https://samplelib.com/lib/preview/mp3/sample-3s.mp3',
+                  ),
+                ),
+              Expanded(
+                child: SingleChildScrollView(
+                  child: Padding(
+                    padding: const EdgeInsets.all(16),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          post.subject,
+                          style: Theme.of(context)
+                              .textTheme
+                              .titleLarge
+                              ?.copyWith(fontWeight: FontWeight.bold),
+                        ),
+                        const SizedBox(height: 8),
+                        Text(
+                          'by ${post.authorUsername}',
+                          style: Theme.of(context).textTheme.bodyMedium,
+                        ),
+                        const SizedBox(height: 16),
+                        WaveformPlayer(audioUrl: post.audioUrl),
+                        const SizedBox(height: 24),
+                        Text(
+                          'Replies',
+                          style: Theme.of(context)
+                              .textTheme
+                              .titleMedium
+                              ?.copyWith(fontWeight: FontWeight.bold),
+                        ),
+                        const SizedBox(height: 12),
+                        StreamBuilder<List<Comment>>(
+                          stream: _commentService.watchComments(widget.postId),
+                          builder: (context, commentSnapshot) {
+                            if (commentSnapshot.connectionState ==
+                                ConnectionState.waiting) {
+                              return const Padding(
+                                padding: EdgeInsets.all(16),
+                                child: CircularProgressIndicator(),
+                              );
+                            }
+                            final comments = commentSnapshot.data ?? [];
+                            final tree = buildCommentTree(comments);
+                            if (tree.isEmpty) {
+                              return const Text('No replies yet.');
+                            }
+                            return Column(
+                              children: tree.map((node) {
+                                final c = node.comment;
+                                return ReplyCard(
+                                  username: c.authorUsername,
+                                  text: c.type == CommentType.voice
+                                      ? 'Voice message'
+                                      : (c.text ?? ''),
+                                  level: node.depth,
+                                  isVoice: c.type == CommentType.voice,
+                                  duration: c.formattedDuration,
+                                  audioUrl: c.audioUrl,
+                                  isLast: false,
+                                  onReply: () => _setReplyTarget(c.id),
+                                );
+                              }).toList(),
+                            );
+                          },
+                        ),
+                      ],
                     ),
-                    const SizedBox(height: 24),
-                    Text(
-                      'Replies',
-                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                            fontWeight: FontWeight.bold,
-                          ),
-                    ),
-                    const SizedBox(height: 12),
-                    ..._buildReplyThread(context),
-                  ],
+                  ),
                 ),
               ),
-            ),
-          ),
-        ],
+            ],
+          );
+        },
       ),
       bottomNavigationBar: SafeArea(
         child: Padding(
@@ -136,43 +205,30 @@ class _ThreadScreenState extends State<ThreadScreen> {
               Expanded(
                 child: TextField(
                   controller: _replyController,
-                  decoration: const InputDecoration(
-                    hintText: 'Reply...',
-                    border: OutlineInputBorder(),
+                  decoration: InputDecoration(
+                    hintText: _replyToCommentId != null
+                        ? 'Reply to comment...'
+                        : 'Reply...',
+                    border: const OutlineInputBorder(),
                   ),
                   textInputAction: TextInputAction.send,
-                  onSubmitted: (_) => _submitReply(),
+                  onSubmitted: (_) => _submitTextReply(),
                 ),
               ),
               const SizedBox(width: 8),
               _hasText
                   ? IconButton(
                       icon: const Icon(Icons.send),
-                      onPressed: _submitReply,
+                      onPressed: _submitTextReply,
                     )
                   : IconButton(
                       icon: const Icon(Icons.mic),
-                      onPressed: _startVoiceReplyRecording,
+                      onPressed: _startVoiceReply,
                     ),
             ],
           ),
         ),
       ),
     );
-  }
-
-  List<Widget> _buildReplyThread(BuildContext context) {
-    return List<Widget>.generate(replies.length, (i) {
-      final reply = replies[i];
-      bool isLast = i == replies.length - 1;
-      return ReplyCard(
-        username: reply['username'],
-        text: reply['text'],
-        level: reply['level'],
-        isVoice: reply['isVoice'] ?? false,
-        duration: reply['duration'],
-        isLast: isLast,
-      );
-    });
   }
 }

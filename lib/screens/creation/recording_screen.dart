@@ -2,14 +2,34 @@ import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 import 'package:just_audio/just_audio.dart';
 import 'package:path_provider/path_provider.dart';
+import 'package:provider/provider.dart';
 
+import '../../providers/echo_auth_provider.dart';
+import '../../services/comment_service.dart';
+import '../../services/post_service.dart';
+import '../../utils/permissions.dart';
 import '../../services/audio_record_service.dart';
 
+enum RecordingMode { post, reply }
+
 class RecordingScreen extends StatefulWidget {
-  final bool isReply;
-  const RecordingScreen({super.key, this.isReply = false});
+  final RecordingMode mode;
+  final String? topicId;
+  final String? postId;
+  final String? subject;
+  final String? parentCommentId;
+
+  const RecordingScreen({
+    super.key,
+    required this.mode,
+    this.topicId,
+    this.postId,
+    this.subject,
+    this.parentCommentId,
+  });
 
   @override
   State<RecordingScreen> createState() => _RecordingScreenState();
@@ -21,29 +41,44 @@ class _RecordingScreenState extends State<RecordingScreen> {
 
   final AudioRecordService _audioRecordService = AudioRecordService();
   final AudioPlayer _audioPlayer = AudioPlayer();
+  final _postService = PostService();
+  final _commentService = CommentService();
 
   Timer? _timer;
+  StreamSubscription<PlayerState>? _playerStateSub;
+  bool _recorderReady = false;
   bool _isRecording = false;
   bool _hasRecorded = false;
   bool _isPlaying = false;
+  bool _isPublishing = false;
   int _elapsedSeconds = 0;
   String? _recordedFilePath;
 
-  int get _maxSeconds => widget.isReply ? replyMaxSeconds : postMaxSeconds;
-  String get _recordingLabel => widget.isReply ? 'Recording reply...' : 'Recording...';
+  int get _maxSeconds =>
+      widget.mode == RecordingMode.reply ? replyMaxSeconds : postMaxSeconds;
 
   @override
   void initState() {
     super.initState();
-    _startSession();
+    _initRecorder();
   }
 
-  Future<void> _startSession() async {
+  Future<void> _initRecorder() async {
     await _audioRecordService.init();
-    await _startRecording();
+    if (mounted) setState(() => _recorderReady = true);
   }
 
   Future<void> _startRecording() async {
+    final granted = await ensureMicrophonePermission();
+    if (!granted) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Microphone permission is required.')),
+        );
+      }
+      return;
+    }
+
     final dir = await getTemporaryDirectory();
     final filename = 'echo_record_${DateTime.now().millisecondsSinceEpoch}.aac';
     final outputPath = File('${dir.path}/$filename').path;
@@ -59,9 +94,7 @@ class _RecordingScreenState extends State<RecordingScreen> {
     _timer?.cancel();
     _timer = Timer.periodic(const Duration(seconds: 1), (timer) async {
       if (!mounted) return;
-      setState(() {
-        _elapsedSeconds++;
-      });
+      setState(() => _elapsedSeconds++);
       if (_elapsedSeconds >= _maxSeconds) {
         await _stopRecording();
       }
@@ -83,26 +116,75 @@ class _RecordingScreenState extends State<RecordingScreen> {
     if (_recordedFilePath == null) return;
     if (_isPlaying) {
       await _audioPlayer.pause();
-      setState(() {
-        _isPlaying = false;
-      });
+      setState(() => _isPlaying = false);
       return;
     }
     try {
+      await _playerStateSub?.cancel();
       await _audioPlayer.setFilePath(_recordedFilePath!);
-      await _audioPlayer.play();
-      setState(() {
-        _isPlaying = true;
-      });
-      _audioPlayer.playerStateStream.listen((state) {
+      _playerStateSub = _audioPlayer.playerStateStream.listen((state) {
+        if (!mounted) return;
         if (state.processingState == ProcessingState.completed) {
-          setState(() {
-            _isPlaying = false;
-          });
+          setState(() => _isPlaying = false);
+        } else {
+          setState(() => _isPlaying = state.playing);
         }
       });
+      await _audioPlayer.play();
+      setState(() => _isPlaying = true);
     } catch (_) {
-      // ignore playback errors
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Could not play preview.')),
+        );
+      }
+    }
+  }
+
+  Future<void> _publish() async {
+    if (_recordedFilePath == null || _isPublishing) return;
+    final auth = context.read<EchoAuthProvider>();
+    final profile = auth.profile;
+    if (profile == null) return;
+
+    setState(() => _isPublishing = true);
+    try {
+      if (widget.mode == RecordingMode.post) {
+        final topicId = widget.topicId;
+        final subject = widget.subject != null
+            ? Uri.decodeComponent(widget.subject!)
+            : '';
+        if (topicId == null || subject.isEmpty) {
+          throw Exception('Missing topic or subject');
+        }
+        final postId = await _postService.createPost(
+          topicId: topicId,
+          subject: subject,
+          profile: profile,
+          localAudioPath: _recordedFilePath!,
+          durationSeconds: _elapsedSeconds,
+        );
+        if (mounted) context.go('/posts/$postId');
+      } else {
+        final postId = widget.postId;
+        if (postId == null) throw Exception('Missing post id');
+        await _commentService.createVoiceComment(
+          postId: postId,
+          profile: profile,
+          localAudioPath: _recordedFilePath!,
+          durationSeconds: _elapsedSeconds,
+          parentCommentId: widget.parentCommentId,
+        );
+        if (mounted) context.go('/posts/$postId');
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Publish failed: $e')),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isPublishing = false);
     }
   }
 
@@ -112,20 +194,10 @@ class _RecordingScreenState extends State<RecordingScreen> {
     return '$min:$sec';
   }
 
-  void _publish() {
-    if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(widget.isReply ? 'Reply posted' : 'Post published'),
-        duration: const Duration(milliseconds: 900),
-      ),
-    );
-    Navigator.of(context).pop();
-  }
-
   @override
   void dispose() {
     _timer?.cancel();
+    _playerStateSub?.cancel();
     _audioPlayer.dispose();
     _audioRecordService.dispose();
     super.dispose();
@@ -134,74 +206,113 @@ class _RecordingScreenState extends State<RecordingScreen> {
   @override
   Widget build(BuildContext context) {
     final currentSeconds = _elapsedSeconds.clamp(0, _maxSeconds);
+    final isReply = widget.mode == RecordingMode.reply;
+
     return Scaffold(
       appBar: AppBar(
-        title: Text(widget.isReply ? 'Voice Reply' : 'Voice Post'),
+        title: Text(isReply ? 'Voice Reply' : 'Voice Post'),
       ),
       body: Center(
         child: Padding(
-          padding: const EdgeInsets.all(24.0),
-          child: _hasRecorded
-              ? Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    const Text(
-                      'Audio recorded',
-                      style: TextStyle(
-                        fontSize: 24,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                    const SizedBox(height: 16),
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
+          padding: const EdgeInsets.all(24),
+          child: !_recorderReady
+              ? const CircularProgressIndicator()
+              : _hasRecorded
+                  ? Column(
+                      mainAxisSize: MainAxisSize.min,
                       children: [
-                        ElevatedButton(
-                          onPressed: _playPreview,
-                          child: Text(_isPlaying ? 'Pause Preview' : 'Play Preview'),
+                        const Text(
+                          'Audio recorded',
+                          style: TextStyle(
+                            fontSize: 24,
+                            fontWeight: FontWeight.bold,
+                          ),
                         ),
-                        const SizedBox(width: 12),
-                        ElevatedButton(
-                          onPressed: _publish,
-                          child: const Text('Publish'),
+                        const SizedBox(height: 16),
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            ElevatedButton(
+                              onPressed: _playPreview,
+                              child: Text(
+                                _isPlaying ? 'Pause Preview' : 'Play Preview',
+                              ),
+                            ),
+                            const SizedBox(width: 12),
+                            ElevatedButton(
+                              onPressed: _isPublishing ? null : _publish,
+                              child: _isPublishing
+                                  ? const SizedBox(
+                                      width: 20,
+                                      height: 20,
+                                      child: CircularProgressIndicator(
+                                        strokeWidth: 2,
+                                      ),
+                                    )
+                                  : const Text('Publish'),
+                            ),
+                          ],
                         ),
                       ],
-                    ),
-                  ],
-                )
-              : Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Text(
-                      _recordingLabel,
-                      style: const TextStyle(
-                        fontSize: 24,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                    const SizedBox(height: 16),
-                    Text(
-                      '${_formatTimer(currentSeconds)} / ${_formatTimer(_maxSeconds)}',
-                      style: const TextStyle(
-                        fontSize: 20,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                    const SizedBox(height: 24),
-                    ElevatedButton.icon(
-                      onPressed: _stopRecording,
-                      icon: const Icon(Icons.stop),
-                      label: const Text('Stop'),
-                      style: ElevatedButton.styleFrom(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 24,
-                          vertical: 14,
+                    )
+                  : _isRecording
+                      ? Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Text(
+                              isReply ? 'Recording reply...' : 'Recording...',
+                              style: const TextStyle(
+                                fontSize: 24,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                            const SizedBox(height: 16),
+                            Text(
+                              '${_formatTimer(currentSeconds)} / ${_formatTimer(_maxSeconds)}',
+                              style: const TextStyle(
+                                fontSize: 20,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                            const SizedBox(height: 24),
+                            ElevatedButton.icon(
+                              onPressed: _stopRecording,
+                              icon: const Icon(Icons.stop),
+                              label: const Text('Stop'),
+                              style: ElevatedButton.styleFrom(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 24,
+                                  vertical: 14,
+                                ),
+                                backgroundColor: Colors.red,
+                              ),
+                            ),
+                          ],
+                        )
+                      : Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Text(
+                              isReply
+                                  ? 'Record a voice reply (max ${_maxSeconds}s)'
+                                  : 'Record your voice post (max ${_maxSeconds}s)',
+                              textAlign: TextAlign.center,
+                              style: const TextStyle(fontSize: 18),
+                            ),
+                            const SizedBox(height: 24),
+                            ElevatedButton.icon(
+                              onPressed: _startRecording,
+                              icon: const Icon(Icons.mic),
+                              label: const Text('Start recording'),
+                              style: ElevatedButton.styleFrom(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 24,
+                                  vertical: 14,
+                                ),
+                              ),
+                            ),
+                          ],
                         ),
-                        backgroundColor: Colors.red,
-                      ),
-                    ),
-                  ],
-                ),
         ),
       ),
     );

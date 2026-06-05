@@ -1,12 +1,16 @@
 import 'package:flutter/material.dart';
 
+import 'waveform_player.dart';
+
 class ReplyCard extends StatelessWidget {
   final String username;
   final String text;
   final int level;
   final bool isVoice;
   final String? duration;
+  final String? audioUrl;
   final bool isLast;
+  final VoidCallback? onReply;
 
   const ReplyCard({
     super.key,
@@ -15,7 +19,9 @@ class ReplyCard extends StatelessWidget {
     required this.level,
     this.isVoice = false,
     this.duration,
+    this.audioUrl,
     this.isLast = false,
+    this.onReply,
   });
 
   @override
@@ -25,11 +31,10 @@ class ReplyCard extends StatelessWidget {
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Thread line
           if (level > 0 || !isLast)
             SizedBox(
               width: 24,
-              height: 60, // FIX: give stack a bounded height
+              height: isVoice && audioUrl != null ? 120 : 60,
               child: Stack(
                 children: [
                   Positioned(
@@ -47,15 +52,11 @@ class ReplyCard extends StatelessWidget {
                       top: 10,
                       width: 12,
                       height: 2,
-                      child: Container(
-                        color: Colors.grey.shade300,
-                      ),
+                      child: Container(color: Colors.grey.shade300),
                     ),
                 ],
               ),
             ),
-
-          // Reply content
           Expanded(
             child: Padding(
               padding: const EdgeInsets.only(left: 8, bottom: 16),
@@ -65,13 +66,7 @@ class ReplyCard extends StatelessWidget {
                   Row(
                     children: [
                       if (level > 0)
-                        const Text(
-                          "↳ ",
-                          style: TextStyle(
-                            color: Colors.grey,
-                            fontSize: 12,
-                          ),
-                        ),
+                        const Text('↳ ', style: TextStyle(color: Colors.grey)),
                       Text(
                         username,
                         style: const TextStyle(
@@ -79,12 +74,34 @@ class ReplyCard extends StatelessWidget {
                           fontSize: 14,
                         ),
                       ),
+                      const Spacer(),
+                      if (onReply != null)
+                        TextButton(
+                          onPressed: onReply,
+                          child: const Text('Reply', style: TextStyle(fontSize: 12)),
+                        ),
                     ],
                   ),
-
                   const SizedBox(height: 4),
-
-                  if (isVoice)
+                  if (isVoice && audioUrl != null)
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        if (duration != null)
+                          Padding(
+                            padding: const EdgeInsets.only(bottom: 4),
+                            child: Text(
+                              duration!,
+                              style: TextStyle(
+                                fontSize: 12,
+                                color: Colors.blue.shade700,
+                              ),
+                            ),
+                          ),
+                        WaveformPlayer(audioUrl: audioUrl!, compact: true),
+                      ],
+                    )
+                  else if (isVoice)
                     Container(
                       padding: const EdgeInsets.symmetric(
                         horizontal: 12,
@@ -97,42 +114,16 @@ class ReplyCard extends StatelessWidget {
                       child: Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          Icon(
-                            Icons.play_arrow,
-                            size: 16,
-                            color: Colors.blue.shade700,
-                          ),
+                          Icon(Icons.mic, size: 16, color: Colors.blue.shade700),
                           const SizedBox(width: 8),
-                          Expanded(
-                            child: Text(
-                              text,
-                              style: TextStyle(
-                                fontSize: 13,
-                                color: Colors.blue.shade900,
-                              ),
-                            ),
-                          ),
-                          if (duration != null && duration!.isNotEmpty) ...[
-                            const SizedBox(width: 8),
-                            Text(
-                              duration!,
-                              style: TextStyle(
-                                fontSize: 12,
-                                color: Colors.blue.shade700,
-                                fontWeight: FontWeight.w500,
-                              ),
-                            ),
-                          ],
+                          Text(text, style: TextStyle(color: Colors.blue.shade900)),
                         ],
                       ),
                     )
                   else
                     Text(
                       text,
-                      style: const TextStyle(
-                        fontSize: 13,
-                        color: Colors.black87,
-                      ),
+                      style: const TextStyle(fontSize: 13, color: Colors.black87),
                     ),
                 ],
               ),
