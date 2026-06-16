@@ -39,5 +39,5 @@ app.*.map.json
 /android/app/profile
 /android/app/release
 
-# Firebase platform files (copy from Firebase Console or flutterfire configure)
-# Keep lib/firebase_options.dart in repo until replaced by flutterfire configure.
+# Supabase project
+# No Firebase configuration used
