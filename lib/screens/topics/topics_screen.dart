@@ -66,7 +66,7 @@ class _TopicsScreenState extends State<TopicsScreen> {
                 leading: const Icon(Icons.topic),
                 title: Text(topic.name),
                 subtitle: Text('by ${topic.authorUsername}'),
-                onTap: () => context.go(
+                onTap: () => context.push(
                   '/topics/${topic.id}?name=${Uri.encodeComponent(topic.name)}',
                 ),
               );

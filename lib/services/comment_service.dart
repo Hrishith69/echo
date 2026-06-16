@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:uuid/uuid.dart';
 
@@ -94,19 +95,20 @@ class CommentService {
     String postId,
     String? parentCommentId,
   ) async {
-    if (parentCommentId != null) return;
+    final rows = await _client
+        .from('comments')
+        .select('id')
+        .eq('post_id', postId);
 
-    final row = await _client
-        .from('posts')
-        .select('reply_count')
-        .eq('id', postId)
-        .single();
-
-    final current = row['reply_count'] as int? ?? 0;
-    await _client
-        .from('posts')
-        .update({'reply_count': current + 1})
-        .eq('id', postId);
+    final count = rows.length;
+    try {
+      await _client
+          .from('posts')
+          .update({'reply_count': count})
+          .eq('id', postId);
+    } catch (e) {
+      debugPrint('Reply count update skipped: $e');
+    }
   }
 }
 

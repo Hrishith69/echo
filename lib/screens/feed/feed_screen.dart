@@ -1,35 +1,27 @@
 import 'package:flutter/material.dart';
-import '../../widgets/post_card.dart';
-import '../../widgets/mic_button.dart';
-import '../../widgets/sidebar_menu.dart';
 import 'package:go_router/go_router.dart';
 
-class FeedScreen extends StatelessWidget {
+import '../../models/post.dart';
+import '../../services/post_service.dart';
+import '../../widgets/post_card.dart';
+import '../../widgets/sidebar_menu.dart';
+
+class FeedScreen extends StatefulWidget {
   const FeedScreen({super.key});
 
-  static final List<Map<String, dynamic>> _mockPosts = [
-    {
-      'username': 'Jess',
-      'topic': 'Ask Echo',
-      'subject': 'Why do people ghost?',
-      'duration': '00:21',
-      'replyCount': 3,
-    },
-    {
-      'username': 'Mike',
-      'topic': 'Relationships',
-      'subject': 'Is silence a form of communication?',
-      'duration': '00:17',
-      'replyCount': 5,
-    },
-    {
-      'username': 'Sara',
-      'topic': 'Career',
-      'subject': 'How do you deal with imposter syndrome?',
-      'duration': '00:25',
-      'replyCount': 2,
-    },
-  ];
+  @override
+  State<FeedScreen> createState() => _FeedScreenState();
+}
+
+class _FeedScreenState extends State<FeedScreen> {
+  final _postService = PostService();
+  late final Stream<List<Post>> _postsStream;
+
+  @override
+  void initState() {
+    super.initState();
+    _postsStream = _postService.watchRecentPosts();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -38,23 +30,37 @@ class FeedScreen extends StatelessWidget {
         title: const Text('Echo Feed'),
       ),
       drawer: const SidebarMenu(),
-      body: ListView.builder(
-        itemCount: _mockPosts.length,
-        itemBuilder: (context, index) {
-          final post = _mockPosts[index];
-
-          return PostCard(
-            username: post['username'],
-            topic: post['topic'],
-            subject: post['subject'],
-            duration: post['duration'],
-            replyCount: post['replyCount'],
-            onTap: () => context.go('/thread'),
+      body: StreamBuilder<List<Post>>(
+        stream: _postsStream,
+        builder: (context, snapshot) {
+          if (snapshot.connectionState == ConnectionState.waiting) {
+            return const Center(child: CircularProgressIndicator());
+          }
+          if (snapshot.hasError) {
+            return Center(child: Text('Error: ${snapshot.error}'));
+          }
+          final posts = snapshot.data ?? [];
+          if (posts.isEmpty) {
+            return const Center(
+              child: Text('No voice posts yet. Browse topics to get started.'),
+            );
+          }
+          return ListView.builder(
+            itemCount: posts.length,
+            itemBuilder: (context, index) {
+              final post = posts[index];
+              return PostCard(
+                username: post.authorUsername,
+                topic: post.topicName ?? 'Topic',
+                subject: post.subject,
+                audioUrl: post.audioUrl,
+                durationSeconds: post.durationSeconds,
+                replyCount: post.replyCount,
+                onTap: () => context.push('/posts/${post.id}'),
+              );
+            },
           );
         },
-      ),
-      floatingActionButton: MicButton(
-        onPressed: () => context.go('/create'),
       ),
     );
   }

@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../utils/recording_platform.dart';
+
 class PostCreationScreen extends StatefulWidget {
   final String topicId;
 
@@ -22,16 +24,24 @@ class _PostCreationScreenState extends State<PostCreationScreen> {
 
   void _goToRecord() {
     if (!_formKey.currentState!.validate()) return;
+    if (!isVoiceRecordingSupported) return;
     final subject = Uri.encodeComponent(_subjectController.text.trim());
-    context.go(
+    context.push(
       '/record?mode=post&topicId=${widget.topicId}&subject=$subject',
     );
   }
 
   @override
   Widget build(BuildContext context) {
+    final recordingSupported = isVoiceRecordingSupported;
+
     return Scaffold(
-      appBar: AppBar(title: const Text('Create Post')),
+      appBar: AppBar(
+        title: const Text('Create Post'),
+        leading: context.canPop()
+            ? BackButton(onPressed: () => context.pop())
+            : null,
+      ),
       body: Padding(
         padding: const EdgeInsets.all(24),
         child: Form(
@@ -58,9 +68,16 @@ class _PostCreationScreenState extends State<PostCreationScreen> {
                   return null;
                 },
               ),
+              if (!recordingSupported) ...[
+                const SizedBox(height: 16),
+                Text(
+                  'Voice recording is only available on Android and iOS.',
+                  style: TextStyle(color: Colors.grey.shade700),
+                ),
+              ],
               const SizedBox(height: 24),
               ElevatedButton.icon(
-                onPressed: _goToRecord,
+                onPressed: recordingSupported ? _goToRecord : null,
                 icon: const Icon(Icons.mic),
                 label: const Text('Record voice post'),
                 style: ElevatedButton.styleFrom(

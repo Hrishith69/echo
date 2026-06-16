@@ -60,6 +60,7 @@ drop policy if exists "topics read" on public.topics;
 drop policy if exists "topics insert" on public.topics;
 drop policy if exists "posts read" on public.posts;
 drop policy if exists "posts insert" on public.posts;
+drop policy if exists "posts update reply_count" on public.posts;
 drop policy if exists "comments read" on public.comments;
 drop policy if exists "comments insert" on public.comments;
 
@@ -80,6 +81,10 @@ create policy "posts read" on public.posts
 
 create policy "posts insert" on public.posts
   for insert to authenticated with check (auth.uid() = author_id);
+
+create policy "posts update reply_count" on public.posts
+  for update to authenticated using (true)
+  with check (true);
 
 create policy "comments read" on public.comments
   for select to authenticated using (true);

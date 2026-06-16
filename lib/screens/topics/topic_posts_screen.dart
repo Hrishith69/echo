@@ -32,7 +32,12 @@ class _TopicPostsScreenState extends State<TopicPostsScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: Text(widget.topicName)),
+      appBar: AppBar(
+        title: Text(widget.topicName),
+        leading: context.canPop()
+            ? BackButton(onPressed: () => context.pop())
+            : null,
+      ),
       body: StreamBuilder<List<Post>>(
         stream: _postsStream,
         builder: (context, snapshot) {
@@ -56,16 +61,17 @@ class _TopicPostsScreenState extends State<TopicPostsScreen> {
                 username: post.authorUsername,
                 topic: widget.topicName,
                 subject: post.subject,
-                duration: post.formattedDuration,
+                audioUrl: post.audioUrl,
+                durationSeconds: post.durationSeconds,
                 replyCount: post.replyCount,
-                onTap: () => context.go('/posts/${post.id}'),
+                onTap: () => context.push('/posts/${post.id}'),
               );
             },
           );
         },
       ),
       floatingActionButton: FloatingActionButton(
-        onPressed: () => context.go('/topics/${widget.topicId}/create'),
+        onPressed: () => context.push('/topics/${widget.topicId}/create'),
         child: const Icon(Icons.add),
       ),
     );

@@ -8,6 +8,7 @@ class Post {
   final String audioPath;
   final int durationSeconds;
   final int replyCount;
+  final String? topicName;
   final DateTime createdAt;
 
   const Post({
@@ -20,10 +21,16 @@ class Post {
     required this.audioPath,
     required this.durationSeconds,
     required this.replyCount,
+    this.topicName,
     required this.createdAt,
   });
 
-  factory Post.fromJson(Map<String, dynamic> json, {String audioUrl = ''}) {
+  factory Post.fromJson(
+    Map<String, dynamic> json, {
+    String audioUrl = '',
+    int? replyCount,
+    String? topicName,
+  }) {
     return Post(
       id: json['id'] as String,
       topicId: json['topic_id'] as String,
@@ -33,7 +40,8 @@ class Post {
       audioPath: json['audio_path'] as String,
       audioUrl: audioUrl,
       durationSeconds: json['duration_seconds'] as int? ?? 0,
-      replyCount: json['reply_count'] as int? ?? 0,
+      replyCount: replyCount ?? json['reply_count'] as int? ?? 0,
+      topicName: topicName,
       createdAt: DateTime.parse(json['created_at'] as String),
     );
   }

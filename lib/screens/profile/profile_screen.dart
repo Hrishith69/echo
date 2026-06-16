@@ -3,6 +3,7 @@ import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 
 import '../../providers/echo_auth_provider.dart';
+import '../../widgets/sidebar_menu.dart';
 
 class ProfileScreen extends StatelessWidget {
   const ProfileScreen({super.key});
@@ -14,6 +15,7 @@ class ProfileScreen extends StatelessWidget {
 
     return Scaffold(
       appBar: AppBar(title: const Text('Profile')),
+      drawer: const SidebarMenu(),
       body: Padding(
         padding: const EdgeInsets.all(24),
         child: Column(

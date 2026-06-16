@@ -3,14 +3,15 @@ import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
-import 'package:just_audio/just_audio.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:provider/provider.dart';
 
 import '../../providers/echo_auth_provider.dart';
+import '../../services/audio_service.dart';
 import '../../services/comment_service.dart';
 import '../../services/post_service.dart';
 import '../../utils/permissions.dart';
+import '../../utils/recording_platform.dart';
 import '../../services/audio_record_service.dart';
 
 enum RecordingMode { post, reply }
@@ -40,16 +41,15 @@ class _RecordingScreenState extends State<RecordingScreen> {
   static const int replyMaxSeconds = 20;
 
   final AudioRecordService _audioRecordService = AudioRecordService();
-  final AudioPlayer _audioPlayer = AudioPlayer();
   final _postService = PostService();
   final _commentService = CommentService();
 
   Timer? _timer;
-  StreamSubscription<PlayerState>? _playerStateSub;
+  AudioService? _audioService;
   bool _recorderReady = false;
+  bool _recordingSupported = false;
   bool _isRecording = false;
   bool _hasRecorded = false;
-  bool _isPlaying = false;
   bool _isPublishing = false;
   int _elapsedSeconds = 0;
   String? _recordedFilePath;
@@ -63,7 +63,18 @@ class _RecordingScreenState extends State<RecordingScreen> {
     _initRecorder();
   }
 
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _audioService ??= context.read<AudioService>();
+  }
+
   Future<void> _initRecorder() async {
+    _recordingSupported = isVoiceRecordingSupported;
+    if (!_recordingSupported) {
+      if (mounted) setState(() => _recorderReady = true);
+      return;
+    }
     await _audioRecordService.init();
     if (mounted) setState(() => _recorderReady = true);
   }
@@ -114,24 +125,18 @@ class _RecordingScreenState extends State<RecordingScreen> {
 
   Future<void> _playPreview() async {
     if (_recordedFilePath == null) return;
-    if (_isPlaying) {
-      await _audioPlayer.pause();
-      setState(() => _isPlaying = false);
+    final audio = _audioService!;
+    final isActive = audio.currentUrl == _recordedFilePath;
+    if (isActive && audio.isPlaying) {
+      await audio.pause();
+      return;
+    }
+    if (isActive && !audio.isPlaying) {
+      await audio.resume();
       return;
     }
     try {
-      await _playerStateSub?.cancel();
-      await _audioPlayer.setFilePath(_recordedFilePath!);
-      _playerStateSub = _audioPlayer.playerStateStream.listen((state) {
-        if (!mounted) return;
-        if (state.processingState == ProcessingState.completed) {
-          setState(() => _isPlaying = false);
-        } else {
-          setState(() => _isPlaying = state.playing);
-        }
-      });
-      await _audioPlayer.play();
-      setState(() => _isPlaying = true);
+      await audio.play(_recordedFilePath!);
     } catch (_) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -197,27 +202,59 @@ class _RecordingScreenState extends State<RecordingScreen> {
   @override
   void dispose() {
     _timer?.cancel();
-    _playerStateSub?.cancel();
-    _audioPlayer.dispose();
-    _audioRecordService.dispose();
+    if (_audioService?.currentUrl == _recordedFilePath) {
+      _audioService?.stop();
+    }
+    if (_recordingSupported) {
+      _audioRecordService.dispose();
+    }
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
+    final audio = context.watch<AudioService>();
+    final isPreviewPlaying =
+        _recordedFilePath != null &&
+        audio.currentUrl == _recordedFilePath &&
+        audio.isPlaying;
     final currentSeconds = _elapsedSeconds.clamp(0, _maxSeconds);
     final isReply = widget.mode == RecordingMode.reply;
 
     return Scaffold(
       appBar: AppBar(
         title: Text(isReply ? 'Voice Reply' : 'Voice Post'),
+        leading: context.canPop()
+            ? BackButton(onPressed: () => context.pop())
+            : null,
       ),
       body: Center(
         child: Padding(
           padding: const EdgeInsets.all(24),
           child: !_recorderReady
               ? const CircularProgressIndicator()
-              : _hasRecorded
+              : !_recordingSupported
+                  ? Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(Icons.mic_off, size: 48, color: Colors.grey.shade600),
+                        const SizedBox(height: 16),
+                        Text(
+                          'Voice recording is not supported on this platform.',
+                          textAlign: TextAlign.center,
+                          style: TextStyle(
+                            fontSize: 18,
+                            color: Colors.grey.shade700,
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        const Text(
+                          'Use the Echo mobile app on Android or iOS to record.',
+                          textAlign: TextAlign.center,
+                        ),
+                      ],
+                    )
+                  : _hasRecorded
                   ? Column(
                       mainAxisSize: MainAxisSize.min,
                       children: [
@@ -235,7 +272,9 @@ class _RecordingScreenState extends State<RecordingScreen> {
                             ElevatedButton(
                               onPressed: _playPreview,
                               child: Text(
-                                _isPlaying ? 'Pause Preview' : 'Play Preview',
+                                isPreviewPlaying
+                                    ? 'Pause Preview'
+                                    : 'Play Preview',
                               ),
                             ),
                             const SizedBox(width: 12),

@@ -5,7 +5,9 @@ import '../screens/auth/login_screen.dart';
 import '../screens/auth/signup_screen.dart';
 import '../screens/creation/post_creation_screen.dart';
 import '../screens/creation/recording_screen.dart';
+import '../screens/feed/feed_screen.dart';
 import '../screens/profile/profile_screen.dart';
+import '../screens/saved/saved_screen.dart';
 import '../screens/thread/thread_screen.dart';
 import '../screens/topics/topic_posts_screen.dart';
 import '../screens/topics/topics_screen.dart';
@@ -33,6 +35,10 @@ GoRouter createEchoRouter(EchoAuthProvider authProvider) {
       GoRoute(
         path: '/signup',
         builder: (context, state) => const SignupScreen(),
+      ),
+      GoRoute(
+        path: '/feed',
+        builder: (context, state) => const FeedScreen(),
       ),
       GoRoute(
         path: '/topics',
@@ -87,6 +93,10 @@ GoRouter createEchoRouter(EchoAuthProvider authProvider) {
       GoRoute(
         path: '/profile',
         builder: (context, state) => const ProfileScreen(),
+      ),
+      GoRoute(
+        path: '/saved',
+        builder: (context, state) => const SavedScreen(),
       ),
     ],
   );

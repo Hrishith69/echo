@@ -8,6 +8,7 @@ class ReplyCard extends StatelessWidget {
   final int level;
   final bool isVoice;
   final String? duration;
+  final int? durationSeconds;
   final String? audioUrl;
   final bool isLast;
   final VoidCallback? onReply;
@@ -19,6 +20,7 @@ class ReplyCard extends StatelessWidget {
     required this.level,
     this.isVoice = false,
     this.duration,
+    this.durationSeconds,
     this.audioUrl,
     this.isLast = false,
     this.onReply,
@@ -98,7 +100,13 @@ class ReplyCard extends StatelessWidget {
                               ),
                             ),
                           ),
-                        WaveformPlayer(audioUrl: audioUrl!, compact: true),
+                        WaveformPlayer(
+                          audioUrl: audioUrl!,
+                          compact: true,
+                          knownDuration: durationSeconds != null
+                              ? Duration(seconds: durationSeconds!)
+                              : null,
+                        ),
                       ],
                     )
                   else if (isVoice)

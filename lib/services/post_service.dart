@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:uuid/uuid.dart';
 
@@ -23,7 +24,15 @@ class PostService {
         .stream(primaryKey: ['id'])
         .eq('topic_id', topicId)
         .order('created_at', ascending: false)
-        .asyncMap(_mapPosts);
+        .asyncMap((rows) => _mapPosts(rows));
+  }
+
+  Stream<List<Post>> watchRecentPosts() {
+    return _client
+        .from('posts')
+        .stream(primaryKey: ['id'])
+        .order('created_at', ascending: false)
+        .asyncMap((rows) => _mapPosts(rows, includeTopicNames: true));
   }
 
   Stream<Post?> watchPost(String postId) {
@@ -38,11 +47,66 @@ class PostService {
         });
   }
 
-  Future<List<Post>> _mapPosts(List<Map<String, dynamic>> rows) async {
+  Future<Map<String, int>> _fetchCommentCounts(List<String> postIds) async {
+    if (postIds.isEmpty) return {};
+
+    final rows = await _client
+        .from('comments')
+        .select('post_id')
+        .inFilter('post_id', postIds);
+
+    final counts = <String, int>{};
+    for (final row in rows) {
+      final postId = row['post_id'] as String;
+      counts[postId] = (counts[postId] ?? 0) + 1;
+    }
+    return counts;
+  }
+
+  Future<List<Post>> _mapPosts(
+    List<Map<String, dynamic>> rows, {
+    bool includeTopicNames = false,
+  }) async {
+    if (rows.isEmpty) return [];
+
+    final postIds = rows.map((row) => row['id'] as String).toList();
+    final commentCounts = await _fetchCommentCounts(postIds);
+
+    Map<String, String>? topicNames;
+    if (includeTopicNames) {
+      final topicIds =
+          rows.map((row) => row['topic_id'] as String).toSet().toList();
+      final topicRows = await _client
+          .from('topics')
+          .select('id, name')
+          .inFilter('id', topicIds);
+      topicNames = {
+        for (final topic in topicRows)
+          topic['id'] as String: topic['name'] as String,
+      };
+    }
+
     return Future.wait(rows.map((row) async {
+      final id = row['id'] as String;
       final path = row['audio_path'] as String;
-      final url = await _storage.getPlaybackUrl(path);
-      return Post.fromJson(row, audioUrl: url);
+      var url = '';
+      try {
+        url = await _storage.getPlaybackUrl(path);
+      } catch (e) {
+        debugPrint('Playback URL error for $path: $e');
+      }
+
+      final storedCount = row['reply_count'] as int? ?? 0;
+      final derivedCount = commentCounts[id] ?? 0;
+      final replyCount =
+          derivedCount > storedCount ? derivedCount : storedCount;
+
+      return Post.fromJson(
+        row,
+        audioUrl: url,
+        replyCount: replyCount,
+        topicName: topicNames?[row['topic_id'] as String],
+      );
     }));
   }
 

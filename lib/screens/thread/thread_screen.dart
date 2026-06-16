@@ -8,6 +8,8 @@ import '../../providers/echo_auth_provider.dart';
 import '../../services/comment_service.dart';
 import '../../services/post_service.dart';
 import '../../utils/comment_tree.dart';
+import '../../services/audio_service.dart';
+import '../../utils/recording_platform.dart';
 import '../../widgets/reply_card.dart';
 import '../../widgets/waveform_player.dart';
 
@@ -26,6 +28,7 @@ class _ThreadScreenState extends State<ThreadScreen> {
   final _postService = PostService();
   late final Stream<Post?> _postStream;
   late final Stream<List<Comment>> _commentsStream;
+  AudioService? _audioService;
   bool _hasText = false;
   String? _replyToCommentId;
 
@@ -42,7 +45,14 @@ class _ThreadScreenState extends State<ThreadScreen> {
   }
 
   @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _audioService ??= context.read<AudioService>();
+  }
+
+  @override
   void dispose() {
+    _audioService?.stop();
     _replyController.dispose();
     super.dispose();
   }
@@ -77,9 +87,17 @@ class _ThreadScreenState extends State<ThreadScreen> {
   }
 
   void _startVoiceReply() {
+    if (!isVoiceRecordingSupported) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Voice recording is only available on Android and iOS.'),
+        ),
+      );
+      return;
+    }
     final parent = _replyToCommentId;
     final query = parent != null ? '&parentCommentId=$parent' : '';
-    context.go(
+    context.push(
       '/record?mode=reply&postId=${widget.postId}$query',
     );
   }
@@ -91,6 +109,9 @@ class _ThreadScreenState extends State<ThreadScreen> {
       appBar: AppBar(
         title: const Text('Thread'),
         elevation: 0,
+        leading: context.canPop()
+            ? BackButton(onPressed: () => context.pop())
+            : null,
       ),
       body: StreamBuilder<Post?>(
         stream: _postStream,
@@ -144,14 +165,10 @@ class _ThreadScreenState extends State<ThreadScreen> {
                           style: Theme.of(context).textTheme.bodyMedium,
                         ),
                         const SizedBox(height: 16),
-                        WaveformPlayer(audioUrl: post.audioUrl),
-                        const SizedBox(height: 24),
-                        Text(
-                          'Replies',
-                          style: Theme.of(context)
-                              .textTheme
-                              .titleMedium
-                              ?.copyWith(fontWeight: FontWeight.bold),
+                        WaveformPlayer(
+                          audioUrl: post.audioUrl,
+                          knownDuration:
+                              Duration(seconds: post.durationSeconds),
                         ),
                         const SizedBox(height: 12),
                         StreamBuilder<List<Comment>>(
@@ -165,26 +182,43 @@ class _ThreadScreenState extends State<ThreadScreen> {
                               );
                             }
                             final comments = commentSnapshot.data ?? [];
+                            final replyLabel = comments.isEmpty
+                                ? 'Replies'
+                                : 'Replies (${comments.length})';
                             final tree = buildCommentTree(comments);
-                            if (tree.isEmpty) {
-                              return const Text('No replies yet.');
-                            }
                             return Column(
-                              children: tree.map((node) {
-                                final c = node.comment;
-                                return ReplyCard(
-                                  username: c.authorUsername,
-                                  text: c.type == CommentType.voice
-                                      ? 'Voice message'
-                                      : (c.text ?? ''),
-                                  level: node.depth,
-                                  isVoice: c.type == CommentType.voice,
-                                  duration: c.formattedDuration,
-                                  audioUrl: c.audioUrl,
-                                  isLast: false,
-                                  onReply: () => _setReplyTarget(c.id),
-                                );
-                              }).toList(),
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  replyLabel,
+                                  style: Theme.of(context)
+                                      .textTheme
+                                      .titleMedium
+                                      ?.copyWith(fontWeight: FontWeight.bold),
+                                ),
+                                const SizedBox(height: 12),
+                                if (tree.isEmpty)
+                                  const Text('No replies yet.')
+                                else
+                                  Column(
+                                    children: tree.map((node) {
+                                      final c = node.comment;
+                                      return ReplyCard(
+                                        username: c.authorUsername,
+                                        text: c.type == CommentType.voice
+                                            ? 'Voice message'
+                                            : (c.text ?? ''),
+                                        level: node.depth,
+                                        isVoice: c.type == CommentType.voice,
+                                        duration: c.formattedDuration,
+                                        durationSeconds: c.durationSeconds,
+                                        audioUrl: c.audioUrl,
+                                        isLast: false,
+                                        onReply: () => _setReplyTarget(c.id),
+                                      );
+                                    }).toList(),
+                                  ),
+                              ],
                             );
                           },
                         ),
