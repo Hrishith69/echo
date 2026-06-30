@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import 'package:provider/provider.dart';
 
 import '../../models/post.dart';
+import '../../services/audio_service.dart';
 import '../../services/post_service.dart';
 import '../../widgets/post_card.dart';
 import '../../widgets/sidebar_menu.dart';
@@ -16,11 +18,18 @@ class FeedScreen extends StatefulWidget {
 class _FeedScreenState extends State<FeedScreen> {
   final _postService = PostService();
   late final Stream<List<Post>> _postsStream;
+  AudioService? _audioService;
 
   @override
   void initState() {
     super.initState();
     _postsStream = _postService.watchRecentPosts();
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _audioService ??= context.read<AudioService>();
   }
 
   @override
@@ -56,7 +65,10 @@ class _FeedScreenState extends State<FeedScreen> {
                 audioUrl: post.audioUrl,
                 durationSeconds: post.durationSeconds,
                 replyCount: post.replyCount,
-                onTap: () => context.push('/posts/${post.id}'),
+                onTap: () {
+                  _audioService?.stop();
+                  context.push('/posts/${post.id}');
+                },
               );
             },
           );
