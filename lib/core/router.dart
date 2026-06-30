@@ -14,7 +14,7 @@ import '../screens/topics/topics_screen.dart';
 
 GoRouter createEchoRouter(EchoAuthProvider authProvider) {
   return GoRouter(
-    initialLocation: '/topics',
+    initialLocation: '/feed',
     refreshListenable: authProvider,
     redirect: (context, state) {
       final isLoading = authProvider.isLoading;
@@ -23,8 +23,16 @@ GoRouter createEchoRouter(EchoAuthProvider authProvider) {
           state.matchedLocation == '/signup';
 
       if (isLoading) return null;
+      
+      // 1. If not logged in and not on login/signup, go to login
       if (!isLoggedIn && !onAuth) return '/login';
-      if (isLoggedIn && onAuth) return '/topics';
+      
+      // 2. If logged in and trying to see login/signup, go to feed
+      if (isLoggedIn && onAuth) return '/feed';
+      
+      // 3. New Guard: If logged in and app is booting up completely fresh at the root path '/'
+      if (isLoggedIn && state.matchedLocation == '/') return '/feed';
+      
       return null;
     },
     routes: [

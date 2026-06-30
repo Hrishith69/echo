@@ -40,7 +40,7 @@ class _SignupScreenState extends State<SignupScreen> {
             _usernameController.text,
             _passwordController.text,
           );
-      if (mounted) context.go('/topics');
+      if (mounted) context.go('/feed');
     } on echo_auth.AuthException catch (e) {
       setState(() => _error = e.message);
     } on AuthApiException catch (e) {
