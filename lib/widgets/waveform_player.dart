@@ -1,8 +1,9 @@
+import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../services/audio_service.dart';
-import 'waveform_bars.dart';
+
 
 class WaveformPlayer extends StatefulWidget {
   final String audioUrl;
@@ -21,6 +22,49 @@ class WaveformPlayer extends StatefulWidget {
 }
 
 class _WaveformPlayerState extends State<WaveformPlayer> {
+  // Generate static bar heights based on the audioUrl as a seed.
+  // This ensures the waveform signature is consistent for each audio file.
+  List<double> _barHeights(int barCount) {
+    final random = Random(widget.audioUrl.hashCode);
+    return List.generate(barCount, (_) => 0.25 + random.nextDouble() * 0.75);
+  }
+
+  Widget _buildWaveformBars(double currentProgress, double maxWidth) {
+    final height = widget.compact ? 28.0 : 40.0;
+    const barWidth = 3.0; // Fixed bar width
+    const gap = 2.0; // Fixed gap between bars
+    final barCount = ((maxWidth + gap) / (barWidth + gap)).floor();
+
+    if (barCount <= 0) {
+      return SizedBox(height: height);
+    }
+
+    final heights = _barHeights(barCount);
+    const playedColor = Colors.blueAccent;
+    final unplayedColor = Colors.grey.shade400;
+    final clampedProgress = currentProgress.clamp(0.0, 1.0);
+    final playedBars = (barCount * clampedProgress).floor();
+
+    return SizedBox(
+      height: height,
+      width: double.infinity,
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween, // Distribute bars evenly
+        children: [
+          for (var i = 0; i < barCount; i++)
+            Container(
+              width: barWidth,
+              height: height * heights[i],
+              decoration: BoxDecoration(
+                color: i < playedBars ? playedColor : unplayedColor,
+                borderRadius: BorderRadius.circular(barWidth / 2), // Half of width for rounded caps
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
   @override
   void initState() {
     super.initState();
@@ -57,12 +101,12 @@ class _WaveformPlayerState extends State<WaveformPlayer> {
     if (widget.audioUrl.isEmpty) return;
     final isActive = audio.currentUrl == widget.audioUrl;
     if (isActive && audio.isPlaying) {
-      await audio.pause();
+      audio.pause();
     } else if (isActive && !audio.isPlaying) {
-      await audio.resume();
+      audio.resume();
     } else {
       try {
-        await audio.play(widget.audioUrl);
+        audio.play(widget.audioUrl);
       } catch (e) {
         debugPrint('Audio load error: $e');
       }
@@ -81,6 +125,23 @@ class _WaveformPlayerState extends State<WaveformPlayer> {
       return cached;
     }
     return null;
+  }
+
+  void _onSeek(BuildContext context, Offset localPosition, double width) {
+    final audio = context.read<AudioService>();
+    final isActive = audio.currentUrl == widget.audioUrl;
+    final totalDuration = _resolveDuration(audio, isActive);
+
+    if (!isActive ||
+        totalDuration == null ||
+        totalDuration.inMilliseconds <= 0) {
+      return;
+    }
+
+    final progress = (localPosition.dx / width).clamp(0.0, 1.0);
+    final seekPosition =
+        Duration(milliseconds: (totalDuration.inMilliseconds * progress).round());
+    audio.seek(seekPosition);
   }
 
   @override
@@ -114,9 +175,7 @@ class _WaveformPlayerState extends State<WaveformPlayer> {
         totalDuration == null && audio.isDurationLoading(widget.audioUrl);
 
     final maxMs = totalDuration?.inMilliseconds.toDouble() ?? 0;
-    final progress = maxMs == 0
-        ? 0.0
-        : currentPosition.inMilliseconds / maxMs;
+    final progress = maxMs == 0 ? 0.0 : currentPosition.inMilliseconds / maxMs;
 
     final durationLabel = isLoadingDuration
         ? '${_format(currentPosition)} / --:--'
@@ -131,23 +190,24 @@ class _WaveformPlayerState extends State<WaveformPlayer> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          WaveformBars(
-            seed: widget.audioUrl,
-            progress: progress,
-            compact: widget.compact,
-            barCount: widget.compact ? 24 : 32,
+          LayoutBuilder(
+            builder: (context, constraints) {
+              return GestureDetector(
+                behavior: HitTestBehavior.opaque,
+                onTapDown: (details) =>
+                    _onSeek(context, details.localPosition, constraints.maxWidth),
+                onHorizontalDragStart: (details) =>
+                    _onSeek(context, details.localPosition, constraints.maxWidth),
+                onHorizontalDragUpdate: (details) =>
+                    _onSeek(context, details.localPosition, constraints.maxWidth),
+                child: _buildWaveformBars(
+                  progress,
+                  constraints.maxWidth,
+                ),
+              );
+            },
           ),
-          SizedBox(height: widget.compact ? 6 : 8),
-          Slider(
-            min: 0,
-            max: maxMs > 0 ? maxMs : 1,
-            value: (currentPosition.inMilliseconds.toDouble())
-                .clamp(0, maxMs > 0 ? maxMs : 1),
-            onChanged: isActive && maxMs > 0
-                ? (value) =>
-                    audio.seek(Duration(milliseconds: value.toInt()))
-                : null,
-          ),
+          SizedBox(height: widget.compact ? 4 : 8),
           Row(
             children: [
               IconButton(

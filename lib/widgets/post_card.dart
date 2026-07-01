@@ -83,12 +83,25 @@ class PostCard extends StatelessWidget {
             const SizedBox(height: 8),
             Row(
               children: [
-                const Icon(Icons.chat_bubble_outline,
-                    size: 20, color: Colors.grey),
-                const SizedBox(width: 4),
-                Text(
-                  '$replyCount',
-                  style: Theme.of(context).textTheme.labelMedium,
+                InkWell(
+                  onTap: onTap,
+                  borderRadius: BorderRadius.circular(8),
+                  child: Padding(
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 4, vertical: 8),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Icon(Icons.chat_bubble_outline,
+                            size: 20, color: Colors.grey),
+                        const SizedBox(width: 4),
+                        Text(
+                          '$replyCount',
+                          style: Theme.of(context).textTheme.labelMedium,
+                        ),
+                      ],
+                    ),
+                  ),
                 ),
                 const Spacer(),
                 IconButton(

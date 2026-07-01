@@ -113,13 +113,12 @@ class AudioService extends ChangeNotifier {
       await _haltPlayback(clearUrl: true);
       if (generation != _playGeneration) return;
 
-      await _setSource(url);
-      if (generation != _playGeneration) return;
-
       _currentUrl = url;
       _position = Duration.zero;
       _duration = _durationCache[url] ?? Duration.zero;
       notifyListeners();
+
+      await _setSource(url);
     } else if (_isPlaying) {
       return;
     }
